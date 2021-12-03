@@ -28,7 +28,11 @@ import chalk from 'chalk'
 import cli from 'cli-ux'
 import fs from 'fs'
 import cron, { ScheduledTask } from 'node-cron'
-import { createConfig, getConfigIterator } from './components/config'
+import {
+  createConfig,
+  getConfigIterator,
+  updateConfig,
+} from './components/config'
 import { printAllLogs } from './components/logger'
 import {
   closeLog,
@@ -40,41 +44,57 @@ import { resetServerAlertStates } from './components/notification/process-server
 import events from './events'
 import { Config } from './interfaces/config'
 import { Probe } from './interfaces/probe'
-import { getSummaryAndSendNotif } from './jobs/summary-notification'
+import {
+  printSummary,
+  getSummaryAndSendNotif,
+  savePidFile,
+} from './jobs/summary-notification'
 import initLoaders from './loaders'
 import { idFeeder, isIDValid, sanitizeProbe } from './looper'
 import { getEventEmitter } from './utils/events'
 import { log } from './utils/pino'
+import path from 'path'
+import isUrl from 'is-url'
+import SymonClient from './symon'
 
 const em = getEventEmitter()
+let symonClient: SymonClient
 
-function getDefaultConfig() {
+function getDefaultConfig(): Array<string> {
   const filesArray = fs.readdirSync('./')
   const monikaDotJsonFile = filesArray.find((x) => x === 'monika.json')
   const monikaDotYamlFile = filesArray.find(
     (x) => x === 'monika.yml' || x === 'monika.yaml'
   )
+  const defaultConfig = monikaDotYamlFile || monikaDotJsonFile
 
-  return monikaDotYamlFile
-    ? `./${monikaDotYamlFile}`
-    : monikaDotJsonFile
-    ? `./${monikaDotJsonFile}`
-    : './monika.yml'
+  return defaultConfig ? [defaultConfig] : []
 }
+
 class Monika extends Command {
   static description = 'Monika command line monitoring tool'
 
   static examples = [
     'monika',
     'monika --logs',
-    'monika -r 1 --id 1,2,5,7',
+    'monika -r 1 --id "weather, stocks, 5, 7"',
     'monika --create-config',
-    'monika --config https://raw.githubusercontent.com/hyperjumptech/monika/main/monika.example.json --config-interval 900',
+    'monika --config https://raw.githubusercontent.com/hyperjumptech/monika/main/monika.example.yml --config-interval 900',
   ]
 
   static flags = {
     version: flags.version({ char: 'v' }),
     help: flags.help({ char: 'h' }),
+
+    symonUrl: flags.string({
+      description: 'URL of Symon',
+      dependsOn: ['symonKey'],
+    }),
+
+    symonKey: flags.string({
+      description: 'API Key for Symon',
+      dependsOn: ['symonUrl'],
+    }),
 
     config: flags.string({
       char: 'c',
@@ -112,15 +132,15 @@ class Monika extends Command {
 
     logs: flags.boolean({
       char: 'l', // prints the (l)ogs
-      description: 'print all logs.',
+      description: 'Print all logs.',
     }),
 
     flush: flags.boolean({
-      description: 'flush logs',
+      description: 'Flush logs',
     }),
 
     verbose: flags.boolean({
-      description: 'show verbose log messages',
+      description: 'Show verbose log messages',
       default: false,
     }),
 
@@ -132,20 +152,20 @@ class Monika extends Command {
 
     repeat: flags.string({
       char: 'r', // (r)epeat
-      description: 'repeats the test run n times',
+      description: 'Repeats the test run n times',
       multiple: false,
     }),
 
     stun: flags.integer({
       char: 's', // (s)stun
-      description: 'interval in seconds to check STUN server',
+      description: 'Interval in seconds to check STUN server',
       multiple: false,
       default: 20,
     }),
 
     id: flags.string({
       char: 'i', // (i)ds to run
-      description: 'specific probe ids to run',
+      description: 'Define specific probe ids to run',
       multiple: false,
     }),
 
@@ -156,7 +176,12 @@ class Monika extends Command {
     }),
 
     force: flags.boolean({
-      description: 'force command',
+      description: 'Force commands with a yes whenever Y/n is prompted.',
+      default: false,
+    }),
+
+    summary: flags.boolean({
+      description: 'Display a summary of monika running stats',
       default: false,
     }),
 
@@ -170,6 +195,7 @@ class Monika extends Command {
     }),
   }
 
+  /* eslint-disable complexity */
   async run() {
     const { flags } = this.parse(Monika)
 
@@ -203,15 +229,32 @@ class Monika extends Command {
           log.info('Cancelled. Thank you.')
         }
         await closeLog()
+
+        return
+      }
+
+      if (flags.summary) {
+        printSummary(this.config)
         return
       }
 
       await initLoaders(flags, this.config)
 
+      const isSymonMode = Boolean(flags.symonUrl) && Boolean(flags.symonKey)
+      if (isSymonMode) {
+        symonClient = new SymonClient(
+          flags.symonUrl as string,
+          flags.symonKey as string
+        )
+        await symonClient.initiate()
+        symonClient.onConfig((config) => updateConfig(config, false))
+      }
+
       let scheduledTasks: ScheduledTask[] = []
       let abortCurrentLooper: (() => void) | undefined
 
-      for await (const config of getConfigIterator()) {
+      for await (const config of getConfigIterator(isSymonMode)) {
+        if (!config) continue
         if (abortCurrentLooper) {
           resetServerAlertStates()
           abortCurrentLooper()
@@ -230,9 +273,24 @@ class Monika extends Command {
         const startupMessage = this.buildStartupMessage(
           config,
           flags.verbose,
-          !abortCurrentLooper
+          !abortCurrentLooper,
+          isSymonMode
         )
-        this.log(startupMessage)
+
+        // Display config files being used
+        if (isSymonMode) {
+          log.info(startupMessage)
+        } else {
+          for (const x in flags.config) {
+            // eslint-disable-next-line max-depth
+            if (isUrl(flags.config[x])) {
+              this.log('Using remote config:', flags.config[x])
+            } else if (flags.config[x].length > 0) {
+              this.log('Using config file:', path.resolve(flags.config[x]))
+            }
+          }
+          this.log(startupMessage)
+        }
 
         // config probes to be run by the looper
         // default sequence for Each element
@@ -248,20 +306,27 @@ class Monika extends Command {
           )
         }
 
-        // sanitize the probe
-        const sanitizedProbe = probesToRun.map((probe: Probe) =>
-          sanitizeProbe(probe, probe.id)
-        )
+        const sanitizedProbe = probesToRun.map((probe: Probe) => {
+          const sanitized = sanitizeProbe(probe, probe.id)
+          if (isSymonMode) {
+            sanitized.alerts = []
+          }
+          return sanitized
+        })
+
+        // save some data into files for later
+        savePidFile(flags.config, config)
 
         // emit the sanitized probe
-        if (sanitizedProbe) {
+        if (sanitizedProbe.length > 0) {
           em.emit(events.config.sanitized, sanitizedProbe)
         }
 
         // schedule status update notification
         if (
           process.env.NODE_ENV !== 'test' &&
-          flags['status-notification'] !== 'false'
+          flags['status-notification'] !== 'false' &&
+          !isSymonMode
         ) {
           // defaults to 6 AM
           // default value is not defined in flag configuration,
@@ -279,7 +344,7 @@ class Monika extends Command {
           scheduledTasks.push(scheduledStatusUpdateTask)
         }
 
-        const verboseLogs = Boolean(config.symon) || flags['keep-verbose-logs']
+        const verboseLogs = isSymonMode || flags['keep-verbose-logs']
 
         abortCurrentLooper = idFeeder(
           sanitizedProbe,
@@ -290,11 +355,20 @@ class Monika extends Command {
       }
     } catch (error) {
       await closeLog()
-      this.error(error?.message, { exit: 1 })
+      this.error((error as any)?.message, { exit: 1 })
     }
   }
 
-  buildStartupMessage(config: Config, verbose = false, firstRun: boolean) {
+  buildStartupMessage(
+    config: Config,
+    verbose = false,
+    firstRun: boolean,
+    isSymonMode = false
+  ) {
+    if (isSymonMode) {
+      return 'Running in Symon mode'
+    }
+
     const { probes, notifications } = config
 
     let startupMessage = ''
@@ -375,19 +449,27 @@ Please refer to the Monika documentations on how to how to configure notificatio
             case 'sendgrid':
               break
             case 'webhook':
-              startupMessage += `    URL: ${item.data.url}\n`
-              break
             case 'slack':
+            case 'lark':
+            case 'google-chat':
               startupMessage += `    URL: ${item.data.url}\n`
               break
-            case 'lark':
-              startupMessage += `    URL: ${item.data.url}\n`
           }
         })
       }
     }
 
     return startupMessage
+  }
+
+  async catch(error: Error) {
+    super.catch(error)
+
+    if (symonClient) {
+      await symonClient.sendStatus({ isOnline: false })
+    }
+
+    throw error
   }
 }
 
@@ -401,6 +483,10 @@ process.on('SIGINT', async () => {
     log.info(
       'Can you give us some feedback by clicking this link https://github.com/hyperjumptech/monika/discussions?\n'
     )
+  }
+
+  if (symonClient) {
+    await symonClient.sendStatus({ isOnline: false })
   }
 
   em.emit(events.application.terminated)

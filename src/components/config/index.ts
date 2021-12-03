@@ -22,34 +22,38 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import EventEmitter from 'events'
 import chokidar from 'chokidar'
-import pEvent from 'p-event'
+import { cli } from 'cli-ux'
+import { existsSync, writeFileSync } from 'fs'
 import isUrl from 'is-url'
-import events from './../../events'
-import { open } from './../../utils/open-website'
+import pEvent from 'p-event'
+
+import events from '../../events'
 import { Config } from '../../interfaces/config'
+import { getEventEmitter } from '../../utils/events'
+import { md5Hash } from '../../utils/hash'
+import { open } from '../../utils/open-website'
+import { log } from '../../utils/pino'
 import { fetchConfig } from './fetch'
 import { parseConfig } from './parse'
 import { validateConfig } from './validate'
-import { handshake } from '../reporter'
-import { log } from '../../utils/pino'
-import { md5Hash } from '../../utils/hash'
-import { existsSync, writeFileSync } from 'fs'
-import { cli } from 'cli-ux'
 
-const emitter = new EventEmitter()
+const emitter = getEventEmitter()
 
 let cfg: Config
 let configs: Partial<Config>[]
 
-export const getConfig = () => {
-  if (!cfg) throw new Error('Configuration setup has not been run yet')
+export const getConfig = (skipConfigCheck = true) => {
+  if (!skipConfigCheck) {
+    if (!cfg) throw new Error('Configuration setup has not been run yet')
+  }
   return cfg
 }
 
-export async function* getConfigIterator() {
-  if (!cfg) throw new Error('Configuration setup has not been run yet')
+export async function* getConfigIterator(skipConfigCheck = true) {
+  if (!skipConfigCheck) {
+    if (!cfg) throw new Error('Configuration setup has not been run yet')
+  }
 
   yield cfg
 
@@ -58,28 +62,18 @@ export async function* getConfigIterator() {
   }
 }
 
-const handshakeAndValidate = async (config: Config) => {
-  if (config.symon?.url && config.symon?.key) {
-    try {
-      await handshake(config)
-    } catch (error) {
-      log.warn(` ›   Warning: Can't do handshake with Symon.`)
+export const updateConfig = async (config: Config, validate = true) => {
+  log.debug('Updating config')
+  if (validate) {
+    const validated = validateConfig(config)
+    if (!validated.valid) {
+      throw new Error(validated.message)
     }
   }
-
-  const validated = validateConfig(config)
-
-  if (!validated.valid) {
-    throw new Error(validated.message)
-  }
-}
-
-const updateConfig = async (config: Config) => {
-  await handshakeAndValidate(config)
-  const lastConfig = cfg?.version
+  const lastConfigVersion = cfg?.version
   cfg = config
-  cfg.version = lastConfig || md5Hash(config)
-  if (lastConfig !== cfg.version) {
+  cfg.version = cfg.version || md5Hash(cfg)
+  if (lastConfigVersion !== undefined && lastConfigVersion !== cfg.version) {
     emitter.emit(events.config.updated, cfg)
     log.warn('config file update detected')
   }
@@ -123,50 +117,52 @@ const scheduleRemoteConfigFetcher = (
   }, interval * 1000)
 }
 
-const parseDefaultConfig = (flags: any): Promise<Partial<Config>>[] => {
-  return (flags.config as Array<string>).map((source, i) => {
-    if (isUrl(source)) {
-      scheduleRemoteConfigFetcher(source, flags['config-interval'], i)
-      return fetchConfig(source)
-    }
-    delete flags.config
-    watchConfigFile(source, 'monika', i, flags.repeat)
-    return parseConfig(source, 'monika')
-  })
+const parseDefaultConfig = (flags: any): Promise<Partial<Config>[]> => {
+  return Promise.all(
+    (flags.config as Array<string>).map((source, i) => {
+      if (isUrl(source)) {
+        scheduleRemoteConfigFetcher(source, flags['config-interval'], i)
+        return fetchConfig(source)
+      }
+      watchConfigFile(source, 'monika', i, flags.repeat)
+      return parseConfig(source, 'monika')
+    })
+  )
 }
 
-const addDefaultNotifications = (
-  parse: Promise<Partial<Config>>
-): Promise<Partial<Config>> => {
-  return parse.then((config) => {
-    log.info('Notifications not found, using desktop as default...')
-    config.notifications = [{ id: 'default', type: 'desktop', data: undefined }]
-    return config
-  })
+const addDefaultNotifications = (config: Partial<Config>): Partial<Config> => {
+  log.info('Notifications not found, using desktop as default...')
+  return {
+    ...config,
+    notifications: [{ id: 'default', type: 'desktop', data: undefined }],
+  }
 }
 
 export const setupConfig = async (flags: any) => {
-  const configParse = new Array<Promise<Partial<Config>>>(0)
-  if (Array.isArray(flags.config) && flags.config.length > 0) {
-    const json = parseDefaultConfig(flags)
-    configParse.push(...json)
+  // check for default config path when -c/--config not provided
+  if (flags.config.length === 0 && !flags.har && !flags.postman) {
+    throw new Error(
+      'Configuration file not found. By default, Monika looks for monika.yml configuration file in the current directory.\n\nOtherwise, you can also specify a configuration file using -c flag as follows:\n\nmonika -c <path_to_configuration_file>\n\nYou can create a configuration file via web interface by opening this web app: https://hyperjumptech.github.io/monika-config-generator/'
+    )
   }
-  let nonDefaultConfig
+
+  const parsedConfigs = await parseDefaultConfig(flags)
+
+  let nonDefaultConfig: Partial<Config> | undefined
   if (flags.har) {
     nonDefaultConfig = parseConfig(flags.har, 'har')
   } else if (flags.postman) {
     nonDefaultConfig = parseConfig(flags.postman, 'postman')
   }
-  if (configParse.length === 0 && nonDefaultConfig !== undefined) {
+
+  if (parsedConfigs.length === 0 && nonDefaultConfig !== undefined) {
     nonDefaultConfig = addDefaultNotifications(nonDefaultConfig)
   }
-  if (nonDefaultConfig !== undefined) configParse.push(nonDefaultConfig)
-  if (configParse.length === 0) {
-    throw new Error(
-      'Configuration file not found. By default, Monika looks for monika.json or monika.yml configuration file in the current directory.\n\nOtherwise, you can also specify a configuration file using -c flag as follows:\n\nmonika -c <path_to_configuration_file>\n\nYou can create a configuration file via web interface by opening this web app: https://hyperjumptech.github.io/monika-config-generator/'
-    )
-  }
-  configs = await Promise.all(configParse)
+
+  if (nonDefaultConfig !== undefined) parsedConfigs.push(nonDefaultConfig)
+
+  configs = parsedConfigs
+
   await updateConfig(mergeConfigs())
 }
 

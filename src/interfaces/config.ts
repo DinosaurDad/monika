@@ -26,13 +26,15 @@ import { Certificate } from './certificate'
 import { Notification } from './notification'
 import { Probe } from './probe'
 import { SymonConfig } from '../components/reporter'
+import { DBLimit } from './data'
 
 export interface Config {
   certificate?: Certificate
   interval?: number
   notifications?: Notification[]
   probes: Probe[]
-  'status-notification': string
+  'status-notification'?: string
   symon?: SymonConfig
   version?: string
+  db_limit?: DBLimit
 }

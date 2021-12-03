@@ -69,14 +69,8 @@ export function tlsChecker() {
               isAlertTriggered: true,
               response: {
                 status: 500,
-                config: {
-                  extraData: {
-                    requestStartedAt: 0,
-                    responseTime: 0,
-                  },
-                },
+                responseTime: 0,
                 data: {},
-                statusText: '',
                 headers: {},
               },
             }
@@ -91,6 +85,7 @@ export function tlsChecker() {
             // TODO: invoke sendNotifications function instead
             // looks like the sendAlerts function does not handle this
             sendAlerts({
+              probeID: '',
               url: host,
               probeState: 'invalid',
               notifications: notifications ?? [],

@@ -22,57 +22,25 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import axios from 'axios'
-import {
-  AxiosRequestConfigWithExtraData,
-  AxiosResponseWithExtraData,
-  RequestConfig,
-} from '../../interfaces/request'
+import { expect } from '@oclif/test'
+import { isValidURL } from '../../src/utils/is-valid-url'
 
-const responseInterceptor = (axiosResponse: AxiosResponseWithExtraData) => {
-  const start = axiosResponse?.config.extraData?.requestStartedAt!
-  const responseTime = new Date().getTime() - start
-
-  const data = {
-    ...axiosResponse,
-    config: {
-      ...axiosResponse?.config,
-      extraData: {
-        ...axiosResponse?.config.extraData,
-        responseTime,
-      },
-    },
-  }
-
-  return data
-}
-
-export const executeRequest = async (config: RequestConfig) => {
-  const axiosInstance = axios.create()
-  axiosInstance.interceptors.request.use(
-    (axiosRequestConfig: AxiosRequestConfigWithExtraData) => {
-      const data = {
-        ...axiosRequestConfig,
-        extraData: {
-          ...axiosRequestConfig?.extraData,
-          requestStartedAt: new Date().getTime(),
-        },
-      }
-      return data
-    }
-  )
-  axiosInstance.interceptors.response.use(
-    (axiosResponse: AxiosResponseWithExtraData) => {
-      const data = responseInterceptor(axiosResponse)
-      return data
-    },
-    (axiosResponse: AxiosResponseWithExtraData) => {
-      const data = responseInterceptor(axiosResponse)
-      throw data
-    }
-  )
-  return axiosInstance.request({
-    ...config,
-    data: config.body,
+describe('check if URL is valid', () => {
+  it('should return true if URL using http protocol', () => {
+    const valid = isValidURL('http://www.example.com')
+    expect(valid).to.be.a('boolean')
+    expect(valid).to.be.equals(true)
   })
-}
+
+  it('should return true if URL using https protocol', () => {
+    const valid = isValidURL('https://www.example.com')
+    expect(valid).to.be.a('boolean')
+    expect(valid).to.be.equals(true)
+  })
+
+  it('should return false if not using http or https protocol', () => {
+    const valid = isValidURL('www.example.com')
+    expect(valid).to.be.a('boolean')
+    expect(valid).to.be.equals(false)
+  })
+})

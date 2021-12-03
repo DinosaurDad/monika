@@ -1,6 +1,6 @@
 ![](https://raw.githubusercontent.com/hyperjumptech/monika/main/docs/public/monika.svg)
 
-[![Build Status](https://github.com/hyperjumptech/monika/workflows/Node.js%20CI/badge.svg?event=push&branch=main)](https://github.com/hyperjumptech/monika/actions)
+[![Build Status](https://github.com/hyperjumptech/monika/workflows/Node.js%20CI/badge.svg?event=push&branch=main)](https://github.com/hyperjumptech/monika/actions) [![codecov](https://codecov.io/gh/hyperjumptech/monika/branch/main/graph/badge.svg?token=O3WVT7DP6F)](https://codecov.io/gh/hyperjumptech/monika)
 
 # About
 
@@ -71,7 +71,7 @@ Please abide by the [Contributor's Code of Conduct](CODE_OF_CONDUCTS.md)
 For detailed information, you can click on any of the specific docs below:
 
 - [Quick Start](https://hyperjumptech.github.io/monika/quick-start)
-- [Installations](https://hyperjumptech.github.io/monika/installation)
+- [Installations](https://monika.hyperjump.tech/quick-start#installation)
 - [How it works](https://hyperjumptech.github.io/monika/guides/probes)
 
 ## License

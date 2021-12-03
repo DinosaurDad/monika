@@ -92,6 +92,10 @@ export const sendLark = async (
                     tag: 'text',
                     text: `From: ${message.meta.monikaInstance}`,
                   },
+                  {
+                    tag: 'text',
+                    text: `Version: ${message.meta.version}`,
+                  },
                 ],
               ],
             },
@@ -118,7 +122,15 @@ export const sendLark = async (
                 },
                 {
                   tag: 'text',
-                  value: `${message.meta.averageResponseTime} ms in the last 24 hours`,
+                  value: `${message.meta.maxResponseTime} ms in the last ${message.meta.responseTimelogLifeTimeInHour} hours`,
+                },
+                {
+                  tag: 'text',
+                  value: `${message.meta.minResponseTime} ms in the last ${message.meta.responseTimelogLifeTimeInHour} hours`,
+                },
+                {
+                  tag: 'text',
+                  value: `${message.meta.averageResponseTime} ms in the last ${message.meta.responseTimelogLifeTimeInHour} hours`,
                 },
                 {
                   tag: 'text',

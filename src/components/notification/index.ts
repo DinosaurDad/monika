@@ -22,6 +22,7 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
+import { getContext, setContext } from '../../context'
 import { MonikaNotifDataBody } from '../../interfaces/data'
 import {
   Notification,
@@ -43,6 +44,7 @@ import { sendWebhook } from './channel/webhook'
 import { sendWhatsapp } from './channel/whatsapp'
 import { sendWorkplace } from './channel/workplace'
 import { sendLark } from './channel/lark'
+import { sendGoogleChat } from './channel/googlechat'
 
 export class NotificationSendingError extends Error {
   notificationType: string
@@ -124,10 +126,7 @@ export async function sendNotifications(
             break
           }
           case 'slack': {
-            await sendSlack({
-              ...notification.data,
-              body: message.body,
-            })
+            await sendSlack(notification.data, message)
             break
           }
           case 'telegram': {
@@ -141,7 +140,7 @@ export async function sendNotifications(
             const transporter = createSmtpTransport(notification.data)
             await sendSmtpMail(transporter, {
               // TODO: Read from ENV Variables
-              from: 'http-probe@hyperjump.tech',
+              from: 'Monika@hyperjump.tech',
               to: notification?.data?.recipients?.join(','),
               subject: message.subject,
               text: message.body,
@@ -184,6 +183,8 @@ export async function sendNotifications(
                 time: message.meta.time,
                 monika: message.meta.monikaInstance,
                 numberOfProbes: String(message.meta.numberOfProbes),
+                maxResponseTime: String(message.meta.maxResponseTime),
+                minResponseTime: String(message.meta.minResponseTime),
                 averageResponseTime: String(message.meta.averageResponseTime),
                 numberOfIncidents: String(message.meta.numberOfIncidents),
                 numberOfRecoveries: String(message.meta.numberOfRecoveries),
@@ -219,6 +220,11 @@ export async function sendNotifications(
             break
           }
 
+          case 'google-chat': {
+            await sendGoogleChat(notification.data, message)
+            break
+          }
+
           default: {
             break
           }
@@ -231,25 +237,57 @@ export async function sendNotifications(
   )
 }
 
-export async function sendAlerts({
-  validation,
-  notifications,
-  url,
-  probeState,
-}: {
+type SendAlertsProps = {
+  probeID: string
   validation: ValidatedResponse
   notifications: Notification[]
   url: string
   probeState: string
-}) {
+}
+
+export async function sendAlerts({
+  probeID,
+  validation,
+  notifications,
+  url,
+  probeState,
+}: SendAlertsProps) {
   const ipAddress = getIp()
+  const isRecovery = probeState === 'UP'
   const message = await getMessageForAlert({
+    probeID,
     alert: validation.alert,
     url,
     ipAddress,
-    probeState,
+    isRecovery,
     response: validation.response,
   })
 
+  updateLastIncidentData(isRecovery, probeID, url)
+
   return sendNotifications(notifications, message)
+}
+
+function updateLastIncidentData(
+  isRecovery: boolean,
+  probeID: string,
+  url: string
+) {
+  const { incidents } = getContext()
+
+  if (isRecovery) {
+    // delete last incident
+    const newIncidents = incidents.filter(
+      (incident) =>
+        incident.probeID !== probeID && incident.probeRequestURL !== url
+    )
+
+    setContext({ incidents: newIncidents })
+    return
+  }
+
+  // set incident date time to global context to be used later on recovery notification
+  const newIncident = { probeID, probeRequestURL: url, createdAt: new Date() }
+
+  setContext({ incidents: [...incidents, newIncident] })
 }

@@ -23,6 +23,7 @@
  **********************************************************************************/
 
 import chai, { expect } from 'chai'
+import spies from 'chai-spies'
 import { sendAlerts } from '../../src/components/notification'
 import * as discord from '../../src/components/notification/channel/discord'
 import * as mailgun from '../../src/components/notification/channel/mailgun'
@@ -33,6 +34,7 @@ import * as telegram from '../../src/components/notification/channel/telegram'
 import * as webhook from '../../src/components/notification/channel/webhook'
 import * as whatsapp from '../../src/components/notification/channel/whatsapp'
 import * as lark from '../../src/components/notification/channel/lark'
+import * as googlechat from '../../src/components/notification/channel/googlechat'
 import {
   MailgunData,
   MonikaNotifData,
@@ -40,8 +42,10 @@ import {
   WebhookData,
   WhatsappData,
   LarkData,
+  GoogleChatData,
 } from '../../src/interfaces/data'
-import { AxiosResponseWithExtraData } from '../../src/interfaces/request'
+
+chai.use(spies)
 
 describe('send alerts', () => {
   afterEach(() => {
@@ -51,18 +55,16 @@ describe('send alerts', () => {
   it('should send UP alert', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: false,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -84,18 +86,16 @@ describe('send alerts', () => {
   it('should send DOWN alert', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -117,18 +117,16 @@ describe('send alerts', () => {
   it('should send mailgun notification', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -151,18 +149,16 @@ describe('send alerts', () => {
   it('should send mailgun notification without username', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -186,18 +182,16 @@ describe('send alerts', () => {
     chai.spy.on(slack, 'sendSlack', () => Promise.resolve())
 
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -226,18 +220,16 @@ describe('send alerts', () => {
   it('should send SMTP notification', async () => {
     chai.spy.on(smtp, 'sendSmtpMail', () => Promise.resolve())
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -262,18 +254,16 @@ describe('send alerts', () => {
     chai.spy.on(whatsapp, 'sendWhatsapp', () => Promise.resolve())
 
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -316,18 +306,16 @@ describe('send alerts', () => {
     chai.spy.on(telegram, 'sendTelegram', () => Promise.resolve())
 
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -351,18 +339,16 @@ describe('send alerts', () => {
     chai.spy.on(discord, 'sendDiscord', () => Promise.resolve())
 
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -384,18 +370,16 @@ describe('send alerts', () => {
     chai.spy.on(monikaNotif, 'sendMonikaNotif', () => Promise.resolve())
 
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -417,18 +401,16 @@ describe('send alerts', () => {
     chai.spy.on(lark, 'sendLark', () => Promise.resolve())
 
     await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
       validation: {
         alert: { query: 'status-not-2xx', message: '' },
         isAlertTriggered: true,
         response: {
+          data: '',
           status: 500,
-          config: {
-            extraData: {
-              responseTime: 0,
-            },
-          },
+          responseTime: 0,
           headers: {},
-        } as AxiosResponseWithExtraData,
+        },
       },
       notifications: [
         {
@@ -444,5 +426,36 @@ describe('send alerts', () => {
     })
 
     expect(lark.sendLark).to.have.been.called.exactly(1)
+  })
+
+  it('should send google chat notification ', async () => {
+    chai.spy.on(googlechat, 'sendGoogleChat', () => Promise.resolve())
+
+    await sendAlerts({
+      probeID: 'c0ff807f-b326-49b7-9b47-7d15f07a90a0',
+      validation: {
+        alert: { query: 'status-not-2xx', message: '' },
+        isAlertTriggered: true,
+        response: {
+          data: '',
+          status: 500,
+          responseTime: 0,
+          headers: {},
+        },
+      },
+      notifications: [
+        {
+          id: 'googlechat-test',
+          type: 'google-chat',
+          data: {
+            url: 'xx',
+          } as GoogleChatData,
+        },
+      ],
+      url: 'https://hyperjump.tech',
+      probeState: 'DOWN',
+    })
+
+    expect(googlechat.sendGoogleChat).to.have.been.called.exactly(1)
   })
 })

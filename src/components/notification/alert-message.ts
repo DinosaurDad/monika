@@ -24,13 +24,13 @@
 
 import { hostname, platform } from 'os'
 import { promisify } from 'util'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import * as Handlebars from 'handlebars'
 import getos from 'getos'
 import osName from 'os-name'
 import { getContext } from '../../context'
 import { NotificationMessage } from '../../interfaces/notification'
-import { AxiosResponseWithExtraData } from '../../interfaces/request'
+import { ProbeRequestResponse } from '../../interfaces/request'
 import { ProbeAlert } from '../../interfaces/probe'
 import {
   getPublicIp,
@@ -40,7 +40,7 @@ import {
 
 const getLinuxDistro = promisify(getos)
 
-const getMonikaInstance = async (ipAddress: string) => {
+export const getMonikaInstance = async (ipAddress: string) => {
   const osHostname = hostname()
   await getPublicIp()
 
@@ -55,46 +55,53 @@ const getMonikaInstance = async (ipAddress: string) => {
     .join('/')})`
 }
 
-export async function getMessageForAlert({
-  alert,
-  url,
-  ipAddress,
-  probeState, // state of the probed target
-  response,
-}: {
+type MessageAlertProps = {
+  probeID: string
   alert: ProbeAlert
   url: string
   ipAddress: string
-  probeState: string
-  response: AxiosResponseWithExtraData
-}): Promise<NotificationMessage> {
-  const { userAgent } = getContext()
+  // state of the probed target
+  isRecovery: boolean
+  response: ProbeRequestResponse
+}
+
+export async function getMessageForAlert({
+  probeID,
+  alert,
+  url,
+  ipAddress,
+  isRecovery,
+  response,
+}: MessageAlertProps): Promise<NotificationMessage> {
+  const { userAgent, incidents } = getContext()
   const [monikaInstance, osName] = await Promise.all([
     getMonikaInstance(ipAddress),
     getOSName(),
   ])
+  const recoveryOrIncident = isRecovery ? 'Recovery' : 'Incident'
   const meta = {
-    type: probeState === 'UP' ? ('recovery' as const) : ('incident' as const),
+    type: isRecovery ? ('recovery' as const) : ('incident' as const),
     url,
     time: format(new Date(), 'yyyy-MM-dd HH:mm:ss XXX'),
     hostname: hostname(),
     privateIpAddress: ipAddress,
     publicIpAddress,
     monikaInstance,
-  }
-  const getSubject = (probeState: string) => {
-    const recoveryOrIncident = probeState === 'UP' ? 'Recovery' : 'Incident'
-
-    return `New ${recoveryOrIncident} from Monika`
+    version: userAgent,
   }
   const getExpectedMessage = (
     alert: ProbeAlert,
-    response: AxiosResponseWithExtraData
+    response: ProbeRequestResponse,
+    isRecovery: boolean
   ) => {
-    const { statusText, status } = response
+    const { status } = response
     const isHTTPStatusCode = status >= 100 && status <= 599
 
-    if (!alert.message) return ''
+    if (!alert.message) {
+      if (isRecovery)
+        return `The request is back to normal and pass the query: ${alert.query}`
+      return `The request failed because the response does not pass the query: ${alert.query}. The actual response status is ${response.status} and the response time is ${response.responseTime}.`
+    }
 
     if (!isHTTPStatusCode) {
       switch (status) {
@@ -106,7 +113,7 @@ export async function getMessageForAlert({
           return 'Connection refused'
 
         default:
-          return statusText
+          return status
       }
     }
 
@@ -114,14 +121,22 @@ export async function getMessageForAlert({
       response: {
         size: Number(response.headers['content-length']),
         status,
-        time: response.config.extraData?.responseTime,
+        time: response?.responseTime,
         body: response.data,
         headers: response.headers,
       },
     })
   }
-  const expectedMessage = getExpectedMessage(alert, response)
-  const bodyString = `Message: ${expectedMessage}
+  const lastIncident = incidents.find(
+    (incident) =>
+      incident.probeID === probeID && incident.probeRequestURL === url
+  )
+  const recoveryMessage = getRecoveryMessage(
+    isRecovery,
+    lastIncident?.createdAt
+  )
+  const expectedMessage = getExpectedMessage(alert, response, isRecovery)
+  const bodyString = `Message: ${recoveryMessage}${expectedMessage}
 
 URL: ${meta.url}
 
@@ -132,16 +147,33 @@ From: ${monikaInstance}
 OS: ${osName}
 
 Version: ${userAgent}`
-  const summary = `${expectedMessage} - ${userAgent} - ${osName}`
+
+  const summary = `${expectedMessage}`
 
   const message = {
-    subject: getSubject(probeState),
+    subject: `New ${recoveryOrIncident} from Monika`,
     body: bodyString,
     summary,
     meta,
   }
 
   return message
+}
+
+function getRecoveryMessage(isRecovery: boolean, incidentDateTime?: Date) {
+  if (!isRecovery || !incidentDateTime) {
+    return ''
+  }
+
+  const incidentDuration = formatDistanceToNow(incidentDateTime, {
+    includeSeconds: true,
+  })
+  const humanReadableIncidentDateTime = format(
+    incidentDateTime,
+    'yyyy-MM-dd HH:mm:ss XXX'
+  )
+
+  return `Target is back to normal after ${incidentDuration}. The incident happened at ${humanReadableIncidentDateTime}. `
 }
 
 export const getMessageForStart = async (
@@ -165,6 +197,7 @@ export const getMessageForStart = async (
       hostname,
       privateIpAddress: ip,
       publicIpAddress,
+      version: userAgent,
     },
   }
 }
@@ -190,6 +223,7 @@ export const getMessageForTerminate = async (
       hostname,
       privateIpAddress: ip,
       publicIpAddress,
+      version: userAgent,
     },
   }
 }

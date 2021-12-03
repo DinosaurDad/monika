@@ -5,6 +5,103 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.8] - 2021-11-22
+
+### Added
+
+- Add Google chat notification channel (#523)
+- Tweet status notification (#514)
+
+### Fixed
+
+- Docs: Update documentations for alert notification and old json examples (#525)
+- Docs: update examples and documentation to you yaml (#519)
+- Zero probes in status notification (#524)
+
+### Updated
+
+- Add send status when initiated, terminated and exited (#530)
+- Add version to handshake data (#529)
+
+## [1.6.7] - 2021-11-03
+
+### Fixed
+
+- Fix reported requests not deleted in symon mode (#520)
+
+## [1.6.6] - 2021-11-02
+
+### Fixed
+
+- Fix windows desktop notification doesn't show (#517)
+- Fix issue with symon reporting (#516)
+
+### Updated
+
+- Prevent status notification when in symon mode (#513)
+
+## [1.6.5] - 2021-10-27
+
+### Fixed
+
+- Fix STUN interval bug (#509)
+- Fix various issues with symon connection (#505 #508)
+
+## [1.6.4] - 2021-10-25
+
+### Fixed
+
+- Missing host in monika status notification (#496)
+- Empty message in incident/recovery notification (#488)
+- Tests not running (#474 #475)
+- Request chain not setting header (#472)
+- Running average, max, and min response time in status notification (#442)
+- Docs: broken links in overview (#481)
+
+### Added
+
+- Codecov for code coverage (#478 #480)
+- Slack message update (#479)
+- Prettify email notification with mailgen (#463)
+- Incident duration in notification (#477)
+
+### Updated
+
+- Docs: Update Seo.js (#482)
+
+## [1.6.3] - 2021-10-07
+
+### Fixed
+
+- Docs: minor url path installation (#462)
+- Using yaml format with remote configuration (#459)
+- In notification message, move Monika's version to new line (#452)
+- Config file changes not detected (#447)
+
+### Added
+
+- Show which config is being used (#460)
+- Limit database size (#444)
+- Show summary of currently running Monika (#440)
+
+## [1.6.2] - 2021-09-28
+
+### Fixed
+
+- Fix undefined app version when not running use npm (#432)
+- Fix a TLS check issue with domain objects (#433)
+- Fix resolve default config as array (#438)
+- Fix Notification was sent when no state transition happen (#445)
+
+### Added
+
+- isEmpty alert query helper (#435)
+- documentation for status notification schedule (#436)
+
+### Changed
+
+- make probe request response interface leaner (#439)
+
 ## [1.6.1] - 2021-09-22
 
 ### Added

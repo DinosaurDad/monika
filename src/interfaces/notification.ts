@@ -33,6 +33,8 @@ import {
   WhatsappData,
   WorkplaceData,
   LarkData,
+  SlackData,
+  GoogleChatData,
 } from './data'
 
 export type Notification =
@@ -49,6 +51,7 @@ export type Notification =
   | WorkplaceNotification
   | DesktopNotification
   | LarkNotification
+  | GoogleChatNotification
 
 interface BaseNotification {
   id: string
@@ -76,7 +79,7 @@ interface WebhookNotification extends BaseNotification {
 
 interface SlackNotification extends BaseNotification {
   type: 'slack'
-  data: WebhookData
+  data: SlackData
 }
 
 interface WhatsappBusinessNotification extends BaseNotification {
@@ -121,6 +124,11 @@ interface LarkNotification extends BaseNotification {
   data: LarkData
 }
 
+interface GoogleChatNotification extends BaseNotification {
+  type: 'google-chat'
+  data: GoogleChatData
+}
+
 export interface NotificationMessage {
   subject: string
   body: string
@@ -139,6 +147,7 @@ interface BaseNotificationMessageMeta {
   publicIpAddress: string
   [key: string]: unknown
   monikaInstance?: any
+  version: string
 }
 interface NotificationIncidentRecoveryMessageMeta
   extends BaseNotificationMessageMeta {

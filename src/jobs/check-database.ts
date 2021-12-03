@@ -22,25 +22,39 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import { expect } from '@oclif/test'
-import { isValidURL } from './../../src/utils/is-valid-url'
+import path from 'path'
+import fs from 'fs'
+import { getConfig } from '../components/config'
+import {
+  deleteFromAlerts,
+  deleteFromNotifications,
+  deleteFromProbeRequests,
+} from '../components/logger/history'
+import { Config } from '../interfaces/config'
+const dbPath = path.resolve(process.cwd(), 'monika-logs.db')
 
-describe('check if URL is valid', () => {
-  it('should return true if URL using http protocol', () => {
-    const valid = isValidURL('http://www.example.com')
-    expect(valid).to.be.a('boolean')
-    expect(valid).to.be.equals(true)
-  })
+export function check_db_size() {
+  const config = getConfig()
+  deleteData(config)
+}
 
-  it('should return true if URL using https protocol', () => {
-    const valid = isValidURL('https://www.example.com')
-    expect(valid).to.be.a('boolean')
-    expect(valid).to.be.equals(true)
-  })
+async function deleteData(config: Config) {
+  const { db_limit } = config
+  const stats = fs.statSync(dbPath)
 
-  it('should return false if not using http or https protocol', () => {
-    const valid = isValidURL('www.example.com')
-    expect(valid).to.be.a('boolean')
-    expect(valid).to.be.equals(false)
-  })
-})
+  if (!db_limit?.max_db_size) {
+    return
+  }
+
+  if (!db_limit.deleted_data) {
+    return
+  }
+
+  if (stats.size > db_limit.max_db_size) {
+    const probe_res = await deleteFromProbeRequests(db_limit.deleted_data)
+    await deleteFromNotifications(probe_res.probe_ids)
+    await deleteFromAlerts(probe_res.probe_request_ids)
+
+    deleteData(config) // recursive until reached expected file size
+  }
+}
